@@ -1,0 +1,314 @@
+
+import { Injectable } from '@angular/core';
+import { PdfMakeWrapper, Table, Stack, Txt, Columns, Ul, Canvas, Rect, Line } from 'pdfmake-wrapper';
+import pdfFonts from 'pdfmake/build/vfs_fonts';
+import { ToastrService } from 'ngx-toastr';
+import { PdfViewerDialogComponentComponent } from 'src/app/View/clinic/pdf-viewer-dialog-component/pdf-viewer-dialog-component.component';
+import { PdfDataClass, PdfDataPatientMedication, PdfDataPatientProblem } from './IPdfData';
+import { PdfViewerDialog } from 'src/app/View/clinic/pdf-viewer-dialog-component/pdf-viewer-dialog-data';
+import { MatDialog } from '@angular/material';
+import { ICustomTableLayout } from 'pdfmake-wrapper/lib/interfaces';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class PdfGenerationService {
+
+  constructor(private toastr: ToastrService, public dialog: MatDialog) { }
+
+  handleError(err: Error): void {
+    this.toastr.error(err.name + ' : ' + err.message);
+  }
+
+  public previewPDF(pobjData: PdfDataClass, dialogHeader: string): void {
+    const pdf: PdfMakeWrapper = this.fillContentInPDF(pobjData);
+
+    pdf.create().getDataUrl(async (pdfURL) => {
+
+
+      const objPdfViewerDialog = new PdfViewerDialog();
+      objPdfViewerDialog.pdfDataUrl = pdfURL;
+      objPdfViewerDialog.headerString = dialogHeader;
+
+      this.dialog.open(PdfViewerDialogComponentComponent, { panelClass: 'my-full-screen-dialog', data: objPdfViewerDialog });
+      return;
+    });
+
+  }
+
+  fillBackgroundWithNoBorderStyle(): ICustomTableLayout {
+    const custmStyle: ICustomTableLayout = {};
+    custmStyle.fillColor = () => '#0c68b3';
+    custmStyle.vLineWidth = () => 0;
+    custmStyle.hLineWidth = () => 0;
+    custmStyle.paddingBottom = () => 30;
+    custmStyle.paddingTop = () => 30;
+    custmStyle.paddingLeft = () => 25;
+    return custmStyle;
+  }
+
+  private fillContentInPDF(pdfData: PdfDataClass): PdfMakeWrapper {
+    const pdfwrapper: PdfMakeWrapper = new PdfMakeWrapper();
+    PdfMakeWrapper.setFonts(pdfFonts);
+    pdfwrapper.defaultStyle({ bold: false, fontSize: 10 });
+    pdfwrapper.pageMargins(0);
+
+    const space = new Txt(' ').fontSize(8).end;
+    const custmStyle: ICustomTableLayout = this.fillBackgroundWithNoBorderStyle();
+    const fnWhiteText = (strText: string) => new Txt(strText).color('white').end;
+    const fnGreyText = (strHeader: string) => new Txt(strHeader).color('grey').bold().end;
+    const fnGreyTextWithMargin = (strHeader: string) => new Txt(strHeader).color('grey').bold().margin(20).end;
+    const fnBlueBoldText = (strData: string) => new Txt(strData).color('#0c68b3').fontSize(11).bold().end;
+
+    const topic = new Txt('Prescription').color('white').fontSize(30).end;
+
+    const prescribedDate = (pdfData.prescribedDate === undefined || pdfData.prescribedDate === '') ? new Date().toUTCString() : new Date(pdfData.prescribedDate).toUTCString();
+
+    const dateTime = new Txt(prescribedDate).alignment('right').fontSize(8).end;
+    const mainTable = new Table([[' ', topic, dateTime]]).layout(custmStyle).widths([20, 'auto', '*']).end;
+
+    pdfwrapper.add(mainTable);
+
+    pdfwrapper.add(
+      new Canvas([
+        new Rect([0, 10], [570, 10]).color('red').end
+      ]).end
+    );
+
+    const clinicDetails = new Stack(
+      [
+        space,
+        new Txt(pdfData.hospitalName).bold().fontSize(10).end,
+        new Txt(pdfData.clinicAddress).end
+      ]
+    ).end;
+
+    pdfwrapper.add(space);
+    const lblDoctorName = fnGreyText('Doctor Name : ');
+    const lblPatientName = fnGreyText('PatientName : ');
+    const lblPatientAgeAndGender = fnGreyText('Age and Gender : ');
+    const dtDoctorName = new Txt(pdfData.doctorName).end;
+    const dtPatientName = new Txt(pdfData.patientName).end;
+    const dtPatientAgeAndGender = new Txt(pdfData.patientAgeAndGender).end;
+
+    const tblDoctorAndPatientBasicDetails = new Table([[lblDoctorName, dtDoctorName],
+    [lblPatientName, dtPatientName], [lblPatientAgeAndGender, dtPatientAgeAndGender]]).alignment('left')
+      .layout('noBorders').height('*').end;
+
+    const tlpData = new Table([
+      [' ', clinicDetails, tblDoctorAndPatientBasicDetails]]).alignment('left')
+      .widths([20, '*', '*']).layout('noBorders').end;
+
+    pdfwrapper.add(tlpData);
+
+    pdfwrapper.add(pdfwrapper.ln(1));
+
+    pdfwrapper.add(
+      new Canvas([
+        new Line([0, 5], [570, 5]).color('red').end
+      ]).end
+    );
+
+    pdfwrapper.add(pdfwrapper.ln(1));
+    pdfwrapper.add(fnGreyTextWithMargin('Medications :'));
+    pdfwrapper.add(pdfwrapper.ln(1));
+
+    const arrMedRow = new Array();
+    for (let iMedIndex = 0; iMedIndex < pdfData.patientMedication.length; iMedIndex++) {
+      const objMedicine: PdfDataPatientMedication = pdfData.patientMedication[iMedIndex];
+      arrMedRow.push(['', iMedIndex + 1, objMedicine.medicine, objMedicine.quantity, objMedicine.frequency, objMedicine.dosage]);
+    }
+
+    const tlpPrescriptionItems = new Table([['', fnBlueBoldText('S.No'), fnBlueBoldText('Description'), fnBlueBoldText('Quantity'), fnBlueBoldText('Take for'), fnBlueBoldText('Time')],
+    ...arrMedRow]).headerRows(1).widths([20, 40, '*', '*', '*', '*']).layout('noBorders').end;
+
+    pdfwrapper.add(tlpPrescriptionItems);
+
+    const arrPatientRows = new Array();
+    for (let iProbIndex = 0; iProbIndex < pdfData.patientProblems.length; iProbIndex++) {
+      const objProblems: PdfDataPatientProblem = pdfData.patientProblems[iProbIndex];
+      if (objProblems.diagnosis === null || objProblems.diagnosis === undefined) {
+        objProblems.diagnosis = '';
+      }
+      if (objProblems.physicalexamination === null || objProblems.physicalexamination === undefined) {
+        objProblems.physicalexamination = '';
+      }
+      arrPatientRows.push(['', iProbIndex + 1, objProblems.problem, objProblems.since, objProblems.diagnosis, objProblems.physicalexamination]);
+    }
+
+    pdfwrapper.add(pdfwrapper.ln(1));
+    pdfwrapper.add(fnGreyTextWithMargin('Problems :'));
+    pdfwrapper.add(pdfwrapper.ln(1));
+
+    const tlpPatientProblems = new Table([['', fnBlueBoldText('S.No'), fnBlueBoldText('Problem'), fnBlueBoldText('Since'), fnBlueBoldText('Diagnosis'), fnBlueBoldText('Physical Examination')],
+    ...arrPatientRows]).headerRows(1).widths([20, 40, '*', '*', '*', '*']).layout('noBorders').end;
+
+    pdfwrapper.add(tlpPatientProblems);
+
+    if (pdfData.isinvestigationrequired) {
+      const arrInvestigations = new Array();
+      for (const objInvestigations of pdfData.patientInvestigation) {
+        arrInvestigations.push(new Txt(objInvestigations.tests + ', ' + objInvestigations.notes).margin([25, 0, 0, 0]).end);
+      }
+      pdfwrapper.add(pdfwrapper.ln(1));
+      pdfwrapper.add(fnGreyTextWithMargin('Investigations : '));
+      pdfwrapper.add(pdfwrapper.ln(1));
+      pdfwrapper.add(new Ul(arrInvestigations).end);
+    }
+
+    if (pdfData.isdietrequired) {
+      const arrDiet = new Array();
+      for (const objDiet of pdfData.patientDiet) {
+        arrDiet.push(new Txt(objDiet.diet).margin([25, 0, 0, 0]).end);
+      }
+      pdfwrapper.add(pdfwrapper.ln(1));
+      pdfwrapper.add(fnGreyTextWithMargin('Diet Advice :'));
+      pdfwrapper.add(pdfwrapper.ln(1));
+      pdfwrapper.add([new Ul(arrDiet).end]);
+    }
+
+    if (pdfData.isadvicerequired) {
+      const arrAdvice = new Array();
+      for (const objAdvice of pdfData.patientAdvice) {
+        arrAdvice.push(new Txt(objAdvice.advice).margin([25, 0, 0, 0]).end);
+      }
+      pdfwrapper.add(pdfwrapper.ln(1));
+      pdfwrapper.add(fnGreyTextWithMargin('General Advice :'));
+      pdfwrapper.add(pdfwrapper.ln(1));
+      pdfwrapper.add([new Ul(arrAdvice).end]);
+    }
+    if (pdfData.isnextvisitrequired) {
+      pdfwrapper.add(pdfwrapper.ln(1));
+      pdfwrapper.add(fnGreyTextWithMargin('Next Visit on : '));
+      pdfwrapper.add([new Txt(pdfData.nextvisit).bold().margin([25, 0, 0, 0]).end]);
+      pdfwrapper.add(pdfwrapper.ln(1));
+    }
+
+    if (pdfData.isvitalrequired) {
+      const arrVital = new Array();
+      for (const objVital of pdfData.patientVitals) {
+        arrVital.push(new Txt(objVital.vitalname + ' : ' + objVital.vitalvalue).margin([25, 0, 0, 0]).end);
+      }
+      pdfwrapper.add(pdfwrapper.ln(1));
+      pdfwrapper.add(fnGreyTextWithMargin('Vitals :'));
+      pdfwrapper.add(pdfwrapper.ln(1));
+      pdfwrapper.add([new Ul(arrVital).end]);
+    }
+
+    return pdfwrapper;
+
+  }
+
+  private fillContentInPDF_old_need_to_Remove(pdfData: PdfDataClass): PdfMakeWrapper {
+    PdfMakeWrapper.setFonts(pdfFonts);
+    const pdf = new PdfMakeWrapper();
+
+    pdf.defaultStyle({
+      bold: false,
+      fontSize: 10
+    });
+
+    const space = new Txt(' ').fontSize(8).end;
+    const topic = new Txt(pdfData.heading).alignment('center').bold().decoration('underline').end;
+    const prescribedDate = (pdfData.prescribedDate === undefined || pdfData.prescribedDate === '') ? new Date().toUTCString() : new Date(pdfData.prescribedDate).toUTCString();
+
+    const dateTime = new Txt(prescribedDate).alignment('right').fontSize(8).end;
+    const mainTable = new Columns([' ', topic, dateTime]).end;
+
+    pdf.add(mainTable);
+
+    const clinicDetails = new Stack(
+      [
+        space,
+        new Txt(pdfData.hospitalName).bold().fontSize(10).end,
+        new Txt(pdfData.clinicAddress).end
+      ]
+    ).end;
+
+    pdf.add(space);
+    const lblDoctorName = new Txt('Doctor Name : ').bold().end;
+    const lblPatientName = new Txt('PatientName : ').bold().end;
+    const lblPatientAgeAndGender = new Txt('Age and Gender : ').bold().end;
+    const dtDoctorName = new Txt(pdfData.doctorName).end;
+    const dtPatientName = new Txt(pdfData.patientName).end;
+    const dtPatientAgeAndGender = new Txt(pdfData.patientAgeAndGender).end;
+
+    const tblDoctorAndPatientBasicDetails = new Table([[lblDoctorName, dtDoctorName],
+    [lblPatientName, dtPatientName], [lblPatientAgeAndGender, dtPatientAgeAndGender]]).alignment('left')
+      .layout('noBorders').height('*').end;
+
+    const tlpData = new Table([
+      [clinicDetails, tblDoctorAndPatientBasicDetails]]).alignment('left')
+      .widths('*').layout('noBorders').end;
+
+    const arrMedRow = new Array();
+    for (let iMedIndex = 0; iMedIndex < pdfData.patientMedication.length; iMedIndex++) {
+      const objMedicine: PdfDataPatientMedication = pdfData.patientMedication[iMedIndex];
+      arrMedRow.push([iMedIndex + 1, objMedicine.medicine, objMedicine.quantity, objMedicine.frequency, objMedicine.dosage]);
+    }
+
+    const arrBlocks = new Array();
+
+    const tlpPrescriptionItems = new Table([['S.No', 'Description', 'Quantity', 'Take for', 'Time'],
+    ...arrMedRow]).headerRows(1).widths([40, '*', '*', '*', '*']).end;
+
+    const arrPatientRows = new Array();
+    for (let iProbIndex = 0; iProbIndex < pdfData.patientProblems.length; iProbIndex++) {
+      const objProblems: PdfDataPatientProblem = pdfData.patientProblems[iProbIndex];
+      if (objProblems.diagnosis === null || objProblems.diagnosis === undefined) {
+        objProblems.diagnosis = '';
+      }
+      if (objProblems.physicalexamination === null || objProblems.physicalexamination === undefined) {
+        objProblems.physicalexamination = '';
+      }
+      arrPatientRows.push([iProbIndex + 1, objProblems.problem, objProblems.since, objProblems.diagnosis, objProblems.physicalexamination]);
+    }
+
+    const tlpPatientProblems = new Table([['S.No', 'Problem', 'Since', 'Diagnosis', 'Physical Examination'],
+    ...arrPatientRows]).headerRows(1).widths([40, '*', '*', '*', '*']).end;
+
+    if (pdfData.isinvestigationrequired) {
+      const arrInvestigations = new Array();
+      for (const objInvestigations of pdfData.patientInvestigation) {
+        arrInvestigations.push(objInvestigations.tests + ', ' + objInvestigations.notes);
+      }
+      arrBlocks.push([new Txt('Investigations : ').bold().end], [new Ul(arrInvestigations).end]);
+    }
+
+    if (pdfData.isdietrequired) {
+      const arrDiet = new Array();
+      for (const objDiet of pdfData.patientDiet) {
+        arrDiet.push(objDiet.diet);
+      }
+      arrBlocks.push([new Txt('Diet Advice :').bold().end], [new Ul(arrDiet).end]);
+    }
+
+    if (pdfData.isadvicerequired) {
+      const arrAdvice = new Array();
+      for (const objAdvice of pdfData.patientAdvice) {
+        arrAdvice.push(objAdvice.advice);
+      }
+      arrBlocks.push([new Txt('General Advice :').bold().end], [new Ul(arrAdvice).end]);
+    }
+    if (pdfData.isnextvisitrequired) {
+      arrBlocks.push([new Txt('Next Visit on : ' + pdfData.nextvisit).bold().end]);
+    }
+
+    if (pdfData.isvitalrequired) {
+      const arrVital = new Array();
+      for (const objVital of pdfData.patientVitals) {
+        arrVital.push(objVital.vitalname + ' : ' + objVital.vitalvalue);
+      }
+      arrBlocks.push([new Txt('Vitals :').bold().end], [new Ul(arrVital).end]);
+    }
+    const tlpFrame = new Table([[tlpData],
+    [new Txt('Medications :').bold().end], [tlpPrescriptionItems],
+    [new Txt('Problems :').bold().end], [tlpPatientProblems],
+    ...arrBlocks,]).widths('*').end;
+
+    pdf.add(tlpFrame);
+
+    return pdf;
+  }
+
+}
