@@ -1,7 +1,6 @@
 import { Component, OnInit } from '@angular/core';
-import { PdfMakeWrapper, Table, Stack, Txt, Columns, Ul, Canvas, Rect, Line, Img } from 'pdfmake-wrapper';
+import { PdfMakeWrapper, Table, Stack, Txt, Columns, Ul, Canvas, Rect, Line, Img, Cell } from 'pdfmake-wrapper';
 import { PdfDataClass, DummyData } from './pdf-data-classes';
-import { ICustomTableLayout } from 'pdfmake-wrapper/lib/interfaces';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 
 /*
@@ -31,7 +30,6 @@ export class PdfViewerComponent implements OnInit {
   }
 
   async createPDF(data: PdfDataClass): Promise<void> {
-    const dnData = new DummyData();
     const pdfwrapper: PdfMakeWrapper = new PdfMakeWrapper();
     PdfMakeWrapper.setFonts(pdfFonts);
     pdfwrapper.defaultStyle({ bold: false, fontSize: 10 });
@@ -55,8 +53,64 @@ export class PdfViewerComponent implements OnInit {
 
     const sepLine = new Canvas([new Rect([0, 3], [pdfWidth - (marginSize * 2), 3]).color('black').end]).end;
 
+    const patientNameAndDetail = new Table([
+      [new Txt(data.patientName + ', ' + data.patientAgeAndGender).fontSize(15).bold().end,
+      new Txt(data.prescribedDate).fontSize(15).bold().end],
+      [new Txt('Patient Id: ' + data.patientid).end, new Txt('Prescription Id: ' + data.prescriptionid).end]
+    ]).alignment('left').layout('noBorders').widths(['*', 'auto']).end;
+
+    const get4LanEmptyArray = () => {
+      const vitalRow = Array(4);
+      for (let i = 0; i < 4; i++) {
+        vitalRow[i] = '';
+      }
+      return vitalRow;
+    };
+
+    const vitalData = Array();
+    if (data.isvitalrequired) {
+      let vitalRow = get4LanEmptyArray();
+      let iCol = 0;
+      for (const vital of data.patientVitals) {
+
+        vitalRow[iCol] = (new Txt(vital.vitalname + ' : ' + vital.vitalvalue).fontSize(6).end);
+        if (iCol === 3) {
+          iCol = -1;
+          vitalData.push(vitalRow);
+          vitalRow = get4LanEmptyArray();
+        }
+        iCol = iCol + 1;
+      }
+      if (vitalRow[0] !== '') {
+        vitalData.push(vitalRow);
+      }
+    }
+    const vitalTable = new Table(vitalData).alignment('justify').widths(['*', '*', '*', '*']).end;
+
+    const getstringInGreyTable = (pTopic: string, pData: string) => {
+      // tslint:disable-next-line: max-line-length
+      return new Table([[new Cell(new Txt(pTopic).alignment('center').bold().end).fillColor('#e6e6e6').end,
+       new Txt(pData).alignment('left').end]]).widths([100, '*']).end;
+    };
+
+    let patientProblems = '';
+    for (const patientProb of data.patientProblems) {
+      patientProblems = patientProblems + patientProb.diagnosis + ', ';
+    }
+    if (patientProblems !== '') {
+      patientProblems = patientProblems.substring(0, patientProblems.length - 2);
+    }
+    const tblDiagnosis = getstringInGreyTable('Diagnosis', patientProblems);
+
+    // Adding the components in the pdf
     pdfwrapper.add(headerColumns);
     pdfwrapper.add(sepLine);
+    pdfwrapper.add(patientNameAndDetail);
+    if (data.isvitalrequired) {
+      pdfwrapper.add(vitalTable);
+    }
+    pdfwrapper.add(pdfwrapper.ln(1));
+    pdfwrapper.add(tblDiagnosis);
 
     pdfwrapper.create().open();
     pdfwrapper.create().getDataUrl(async (pdfURL) => {
