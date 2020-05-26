@@ -40,6 +40,7 @@ export class PdfViewerComponent implements OnInit {
 
     pdfwrapper.pageMargins(marginSize);
 
+    // Hospital Logo
     const logo = await new Img(data.logo).width(65).height(65).build();
     const clinicDetail = new Stack([
       new Txt(data.doctorName).fontSize(15).bold().end,
@@ -49,10 +50,12 @@ export class PdfViewerComponent implements OnInit {
       new Txt(data.hospitalName + ', ' + data.clinicAddress).end,
     ]).end;
 
+    // Clinic Details
     const headerColumns = new Columns([logo, clinicDetail]).columnGap(16).alignment('justify').end;
 
     const sepLine = new Canvas([new Rect([0, 3], [pdfWidth - (marginSize * 2), 3]).color('black').end]).end;
 
+    // Patient Details
     const patientNameAndDetail = new Table([
       [new Txt(data.patientName + ', ' + data.patientAgeAndGender).fontSize(15).bold().end,
       new Txt(data.prescribedDate).fontSize(15).bold().end],
@@ -67,6 +70,7 @@ export class PdfViewerComponent implements OnInit {
       return vitalRow;
     };
 
+    // Vitals
     const vitalData = Array();
     if (data.isvitalrequired) {
       let vitalRow = get4LanEmptyArray();
@@ -87,10 +91,11 @@ export class PdfViewerComponent implements OnInit {
     }
     const vitalTable = new Table(vitalData).alignment('justify').widths(['*', '*', '*', '*']).end;
 
+    // Patient Problems
     const getstringInGreyTable = (pTopic: string, pData: string) => {
       // tslint:disable-next-line: max-line-length
       return new Table([[new Cell(new Txt(pTopic).alignment('center').bold().end).fillColor('#e6e6e6').end,
-       new Txt(pData).alignment('left').end]]).widths([100, '*']).end;
+      new Txt(pData).alignment('left').end]]).widths([100, '*']).end;
     };
 
     let patientProblems = '';
@@ -102,6 +107,19 @@ export class PdfViewerComponent implements OnInit {
     }
     const tblDiagnosis = getstringInGreyTable('Diagnosis', patientProblems);
 
+    // Header components for the Medicine
+    const medicinedata = new Array();
+    medicinedata.push([new Cell(new Txt('Rx').fontSize(15).bold().end).colSpan(2).end,
+      '',
+    new Stack(['Frequency', '', '( Mor-Aft-Eve-Night )']).end,
+      'Period', 'Quantity']);
+    let iMed = 1;
+    for (const objMed of data.patientMedication) {
+      medicinedata.push([iMed, objMed.medicine, objMed.dosage, objMed.frequency, objMed.quantity]);
+      iMed = iMed + 1;
+    }
+    const medicineHeader = new Table([...medicinedata]).widths([20, '*', '*', '*', '*']).end;
+
     // Adding the components in the pdf
     pdfwrapper.add(headerColumns);
     pdfwrapper.add(sepLine);
@@ -111,6 +129,8 @@ export class PdfViewerComponent implements OnInit {
     }
     pdfwrapper.add(pdfwrapper.ln(1));
     pdfwrapper.add(tblDiagnosis);
+    pdfwrapper.add(pdfwrapper.ln(1));
+    pdfwrapper.add(medicineHeader);
 
     pdfwrapper.create().open();
     pdfwrapper.create().getDataUrl(async (pdfURL) => {
