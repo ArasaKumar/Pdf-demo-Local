@@ -108,17 +108,17 @@ export class PdfViewerComponent implements OnInit {
     const tblDiagnosis = getstringInGreyTable('Diagnosis', patientProblems);
 
     // Header components for the Medicine
-    const medicinedata = new Array();
-    medicinedata.push([new Cell(new Txt('Rx').fontSize(15).bold().end).colSpan(2).end,
+    const medicineDetails = new Array();
+    medicineDetails.push([new Cell(new Txt('Rx').fontSize(15).bold().end).colSpan(2).end,
       '',
     new Stack(['Frequency', '', '( Mor-Aft-Eve-Night )']).end,
       'Period', 'Quantity']);
     let iMed = 1;
     for (const objMed of data.patientMedication) {
-      medicinedata.push([iMed, objMed.medicine, objMed.dosage, objMed.frequency, objMed.quantity]);
+      medicineDetails.push([iMed, objMed.medicine, objMed.dosage, objMed.frequency, objMed.quantity]);
       iMed = iMed + 1;
     }
-    const medicineHeader = new Table([...medicinedata]).widths([20, '*', '*', '*', '*']).end;
+    const medicineHeader = new Table([...medicineDetails]).widths([20, '*', '*', '*', '*']).end;
 
     // Adding the components in the pdf
     pdfwrapper.add(headerColumns);
