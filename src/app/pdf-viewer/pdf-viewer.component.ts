@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { PdfMakeWrapper, Table, Stack, Txt, Columns, Ul, Canvas, Rect, Line, Img, Cell } from 'pdfmake-wrapper';
 import { PdfDataClass, DummyData } from './pdf-data-classes';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
+import { ICustomTableLayout } from 'pdfmake-wrapper/lib/interfaces';
 
 /*
 A4 Sheet Size = 595 × 842 points
@@ -29,15 +30,23 @@ export class PdfViewerComponent implements OnInit {
     }
   }
 
+  alternateRowColouring(): ICustomTableLayout {
+    const custmStyle: ICustomTableLayout = {};
+    custmStyle.fillColor = (i, node) => {
+      return (i > 0 && (i % 2 === 0)) ? '#e6e6e6' : 'white';
+    };
+    return custmStyle;
+  }
+
   async createPDF(data: PdfDataClass): Promise<void> {
     const pdfwrapper: PdfMakeWrapper = new PdfMakeWrapper();
+    const pdfWidth = 595;
+    const marginSize = 20;
+    const custmStyle: ICustomTableLayout = this.alternateRowColouring();
+
     PdfMakeWrapper.setFonts(pdfFonts);
     pdfwrapper.defaultStyle({ bold: false, fontSize: 10 });
     pdfwrapper.pageSize('A4');
-
-    const pdfWidth = 595;
-    const marginSize = 20;
-
     pdfwrapper.pageMargins(marginSize);
 
     // Hospital Logo
@@ -94,7 +103,7 @@ export class PdfViewerComponent implements OnInit {
     // Patient Problems
     const getstringInGreyTable = (pTopic: string, pData: string) => {
       // tslint:disable-next-line: max-line-length
-      return new Table([[new Cell(new Txt(pTopic).alignment('center').bold().end).fillColor('#e6e6e6').end,
+      return new Table([[new Cell(new Txt(pTopic).alignment('center').bold().end).fillColor('#c8ccc9').end,
       new Txt(pData).alignment('left').end]]).widths([100, '*']).end;
     };
 
@@ -118,7 +127,7 @@ export class PdfViewerComponent implements OnInit {
       medicineDetails.push([iMed, objMed.medicine, objMed.dosage, objMed.frequency, objMed.quantity]);
       iMed = iMed + 1;
     }
-    const medicineHeader = new Table([...medicineDetails]).widths([20, '*', '*', '*', '*']).end;
+    const medicineHeader = new Table([...medicineDetails]).widths([20, '*', '*', '*', '*']).layout(custmStyle).end;
 
     // Adding the components in the pdf
     pdfwrapper.add(headerColumns);
